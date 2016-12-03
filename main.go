@@ -1,7 +1,11 @@
-package lock
+package main
 
 import (
 	"sync"
+	"time"
+	"math/rand"
+	"fmt"
+	"strconv"
 )
 
 // интерфейс блокировки
@@ -17,21 +21,26 @@ type KeyLocker interface {
 }
 
 type lock struct {
-	mutex *sync.Mutex
-	once  *sync.Once
+	once  chan struct{}
 }
 
 func NewLock() *lock {
-	return &lock{&sync.Mutex{}, &sync.Once{}}
+	return &lock{
+		once:make(chan struct{}),
+	}
 }
 
 func (obj *lock) Block() {
-	obj.mutex.Lock()
-	obj.once = &sync.Once{}
+	obj.once <- struct{}{}
 }
 
 func (obj *lock) Unblock() {
-	obj.once.Do(func() { obj.mutex.Unlock() })
+	select{
+		case <- obj.once:
+			// unblocked code
+		default:
+			// do nothing 
+	}
 }
 
 type LockKey struct {
@@ -66,9 +75,32 @@ func (obj *LockKey) Block(key string) {
 // Unblock вызывает разблокировку.
 // При повторном вызове ничего не происходит.
 func (obj *LockKey) Unblock(key string) {
+	obj.mutex.Lock()
 	lock, ok := obj.locks[key]
 	if !ok {
+		obj.mutex.Unlock()
 		return
 	}
+	obj.mutex.Unlock()
 	lock.Unblock()
+}
+
+func main() {
+	var wg sync.WaitGroup
+	keys := NewKeyLock()
+	for i:=0; i< 100; i++{
+		num := i
+		wg.Add(1)
+		go func(wg *sync.WaitGroup, id int){
+			for i:= 0; i < 10; i++{
+				keys.Block(strconv.Itoa(rand.Intn(10)))
+				time.Sleep(time.Second * time.Duration(rand.Intn(3)))
+				keys.Unblock(strconv.Itoa(rand.Intn(10)))
+				fmt.Printf("%d is done", id)
+				time.Sleep(time.Second * time.Duration(rand.Intn(5)))
+			}
+			wg.Done()
+		}(&wg, num)
+	}
+	wg.Wait()
 }
