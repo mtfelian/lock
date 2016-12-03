@@ -73,6 +73,7 @@ func (obj *LockKey) Unblock(key string) {
 	obj.mutex.Lock()
 	lock, ok := obj.locks[key]
 	if !ok {
+		obj.mutex.Unlock()
 		return
 	}
 	obj.mutex.Unlock()
