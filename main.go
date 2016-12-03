@@ -1,7 +1,11 @@
-package lock
+package main
 
 import (
 	"sync"
+	"time"
+	"math/rand"
+	"fmt"
+	"strconv"
 )
 
 // интерфейс блокировки
@@ -71,4 +75,24 @@ func (obj *LockKey) Unblock(key string) {
 		return
 	}
 	lock.Unblock()
+}
+
+func main() {
+	var wg sync.WaitGroup
+	keys := NewKeyLock()
+	for i:=0; i< 100; i++{
+		num := i
+		wg.Add(1)
+		go func(wg *sync.WaitGroup, id int){
+			for i:= 0; i < 10; i++{
+				keys.Block(strconv.Itoa(rand.Intn(10)))
+				time.Sleep(time.Second * time.Duration(rand.Intn(3)))
+				keys.Unblock(strconv.Itoa(rand.Intn(10)))
+				fmt.Printf("%d is done", id)
+				time.Sleep(time.Second * time.Duration(rand.Intn(5)))
+			}
+			wg.Done()
+		}(&wg, num)
+	}
+	wg.Wait()
 }
