@@ -21,21 +21,26 @@ type KeyLocker interface {
 }
 
 type lock struct {
-	mutex *sync.Mutex
-	once  *sync.Once
+	once  chan struct{}
 }
 
 func NewLock() *lock {
-	return &lock{&sync.Mutex{}, &sync.Once{}}
+	return &lock{
+		once:make(chan struct{}),
+	}
 }
 
 func (obj *lock) Block() {
-	obj.mutex.Lock()
-	obj.once = &sync.Once{}
+	obj.once <- struct{}{}
 }
 
 func (obj *lock) Unblock() {
-	obj.once.Do(func() { obj.mutex.Unlock() })
+	select{
+		case <- obj.once:
+			// unblocked code
+		default:
+			// do nothing 
+	}
 }
 
 type LockKey struct {
