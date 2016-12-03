@@ -70,10 +70,12 @@ func (obj *LockKey) Block(key string) {
 // Unblock вызывает разблокировку.
 // При повторном вызове ничего не происходит.
 func (obj *LockKey) Unblock(key string) {
+	obj.mutex.Lock()
 	lock, ok := obj.locks[key]
 	if !ok {
 		return
 	}
+	obj.mutex.Unlock()
 	lock.Unblock()
 }
 
