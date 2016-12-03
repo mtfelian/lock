@@ -35,37 +35,37 @@ func (obj *lock) Unblock() {
 }
 
 type LockKey struct {
-	mutex map[string]*sync.Mutex
-	once  map[string]*sync.Once
+	mutex *sync.Mutex
+	locks map[string]*lock
 }
 
 func NewKeyLock() *LockKey {
-	return &LockKey{make(map[string]*sync.Mutex), make(map[string]*sync.Once)}
+	return &LockKey{make(map[string]*lock}
 }
 
 func (obj *LockKey) newKey(key string) {
-	obj.mutex[key] = &sync.Mutex{}
-	obj.once[key] = &sync.Once{}
+	obj.locks[key] = NewLock()
 }
 
 // Block вызывает блокировку.
 // При повторном вызове подвисает в ожидании разблокировки
 func (obj *LockKey) Block(key string) {
-	m, ok := obj.mutex[key]
+	obj.mutex.Lock()
+	lock, ok := obj.locks[key]
 	if !ok {
 		obj.newKey(key)
-		m = obj.mutex[key]
+		lock = obj.locks[key]
 	}
-	m.Lock()
-	obj.once[key] = &sync.Once{}
+	obj.mutex.Unlock()
+	lock.Block()
 }
 
 // Unblock вызывает разблокировку.
 // При повторном вызове ничего не происходит.
 func (obj *LockKey) Unblock(key string) {
-	m, ok := obj.mutex[key]
+	lock, ok := obj.locks[key]
 	if !ok {
 		return
 	}
-	obj.once[key].Do(func() { m.Unlock() })
+	lock.Unblock()
 }
