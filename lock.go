@@ -1,71 +1,51 @@
 package lock
 
-import (
-	"sync"
-)
+import "sync"
 
-// интерфейс блокировки
-type Locker interface {
-	Block()
-	Unblock()
+// KeyLock Mutex lock by key interface
+type KeyLock struct {
+	sync.RWMutex // этот мьютекс защищает набор мьютексов ниже
+	mutex        map[string]*sync.Mutex
 }
 
-// интерфейс блокировки по строковому ключу
-type KeyLocker interface {
-	Locker
-	NewKey()
-}
+// Block Блокировка с ожиданием по ключу
+func (kl *KeyLock) Block(key string) {
 
-type lock struct {
-	mutex *sync.Mutex
-	once  *sync.Once
-}
-
-func NewLock() *lock {
-	return &lock{&sync.Mutex{}, &sync.Once{}}
-}
-
-func (obj *lock) Block() {
-	obj.mutex.Lock()
-	obj.once = &sync.Once{}
-}
-
-func (obj *lock) Unblock() {
-	obj.once.Do(func() { obj.mutex.Unlock() })
-}
-
-type LockKey struct {
-	mutex map[string]*sync.Mutex
-	once  map[string]*sync.Once
-}
-
-func NewKeyLock() *LockKey {
-	return &LockKey{make(map[string]*sync.Mutex), make(map[string]*sync.Once)}
-}
-
-func (obj *LockKey) newKey(key string) {
-	obj.mutex[key] = &sync.Mutex{}
-	obj.once[key] = &sync.Once{}
-}
-
-// Block вызывает блокировку.
-// При повторном вызове подвисает в ожидании разблокировки
-func (obj *LockKey) Block(key string) {
-	m, ok := obj.mutex[key]
+	kl.RLock()
+	m, ok := kl.mutex[key]
+	kl.RUnlock()
 	if !ok {
-		obj.newKey(key)
-		m = obj.mutex[key]
+		kl.Lock()
+		kl.mutex[key] = &sync.Mutex{}
+		m, ok = kl.mutex[key]
+		kl.Unlock()
+		if !ok {
+			panic("lock.block(): can't create mutex")
+		}
 	}
+
 	m.Lock()
-	obj.once[key] = &sync.Once{}
 }
 
-// Unblock вызывает разблокировку.
-// При повторном вызове ничего не происходит.
-func (obj *LockKey) Unblock(key string) {
-	m, ok := obj.mutex[key]
-	if !ok {
-		return
+// Unblock Раблокировка по ключу
+func (kl *KeyLock) Unblock(key string) {
+
+	kl.RLock()
+	m, ok := kl.mutex[key]
+	kl.RUnlock()
+	if ok {
+		m.Unlock()
+		// это можешь убрать, если не хочешь удалять созданные мьютексы
+		kl.Lock()
+		delete(kl.mutex, key)
+		kl.Unlock()
 	}
-	obj.once[key].Do(func() { m.Unlock() })
+}
+
+// NewKeyLock конструктор
+func NewKeyLock() *KeyLock {
+
+	return &KeyLock{
+		mutex: make(map[string]*sync.Mutex),
+	}
 }
