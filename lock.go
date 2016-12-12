@@ -80,9 +80,5 @@ func (lk *LockKey) Unblock(key string) {
 	lk.RUnlock()
 	if ok {
 		m.Unlock()
-		// это можешь убрать, если не хочешь удалять созданные мьютексы
-		lk.Lock()
-		delete(lk.mutex, key)
-		lk.Unlock()
 	}
 }
