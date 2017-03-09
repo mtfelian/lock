@@ -1,8 +1,6 @@
 package lock
 
-import (
-	"sync"
-)
+import "sync"
 
 // интерфейс блокировки
 type Locker interface {
@@ -34,38 +32,53 @@ func (obj *lock) Unblock() {
 	obj.once.Do(func() { obj.mutex.Unlock() })
 }
 
+// LockKey Mutex lock by key
 type LockKey struct {
-	mutex map[string]*sync.Mutex
-	once  map[string]*sync.Once
+	sync.RWMutex // этот мьютекс защищает набор мьютексов ниже
+	mutex        map[string]*sync.Mutex
 }
 
+// NewKeyLock конструктор
 func NewKeyLock() *LockKey {
-	return &LockKey{make(map[string]*sync.Mutex), make(map[string]*sync.Once)}
+
+	return &LockKey{
+		mutex: make(map[string]*sync.Mutex),
+	}
 }
 
-func (obj *LockKey) newKey(key string) {
-	obj.mutex[key] = &sync.Mutex{}
-	obj.once[key] = &sync.Once{}
+func (lk *LockKey) newKey(key string) {
+
+	lk.mutex[key] = &sync.Mutex{}
 }
 
 // Block вызывает блокировку.
 // При повторном вызове подвисает в ожидании разблокировки
-func (obj *LockKey) Block(key string) {
-	m, ok := obj.mutex[key]
+func (lk *LockKey) Block(key string) {
+
+	lk.RLock()
+	m, ok := lk.mutex[key]
+	lk.RUnlock()
 	if !ok {
-		obj.newKey(key)
-		m = obj.mutex[key]
+		lk.Lock()
+		lk.mutex[key] = &sync.Mutex{}
+		m, ok = lk.mutex[key]
+		lk.Unlock()
+		if !ok {
+			panic("lock.block(): can't create mutex")
+		}
 	}
+
 	m.Lock()
-	obj.once[key] = &sync.Once{}
 }
 
 // Unblock вызывает разблокировку.
 // При повторном вызове ничего не происходит.
-func (obj *LockKey) Unblock(key string) {
-	m, ok := obj.mutex[key]
-	if !ok {
-		return
+func (lk *LockKey) Unblock(key string) {
+
+	lk.RLock()
+	m, ok := lk.mutex[key]
+	lk.RUnlock()
+	if ok {
+		m.Unlock()
 	}
-	obj.once[key].Do(func() { m.Unlock() })
 }
