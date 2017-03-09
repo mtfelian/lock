@@ -11,7 +11,6 @@ type Locker interface {
 // KeyLocker is an interface to lock by string key
 type KeyLocker interface {
 	Locker
-	NewKey()
 }
 
 // lock is a mutex lock by key object
