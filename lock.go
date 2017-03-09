@@ -2,79 +2,76 @@ package lock
 
 import "sync"
 
-// интерфейс блокировки
+// Locker is an interface for locking
 type Locker interface {
 	Block()
 	Unblock()
 }
 
-// интерфейс блокировки по строковому ключу
+// KeyLocker is an interface to lock by string key
 type KeyLocker interface {
 	Locker
 	NewKey()
 }
 
+// lock is a mutex lock by key object
 type lock struct {
 	mutex *sync.Mutex
 	once  *sync.Once
 }
 
+// NewLock creates new lock object
 func NewLock() *lock {
 	return &lock{&sync.Mutex{}, &sync.Once{}}
 }
 
+// Block hangs is obj already blocked
 func (obj *lock) Block() {
 	obj.mutex.Lock()
 	obj.once = &sync.Once{}
 }
 
+// Unblock unblocks obj
 func (obj *lock) Unblock() {
 	obj.once.Do(func() { obj.mutex.Unlock() })
 }
 
-// LockKey Mutex lock by key
-type LockKey struct {
-	sync.RWMutex // этот мьютекс защищает набор мьютексов ниже
+// keyLock is a mutex lock by key object
+type keyLock struct {
+	sync.RWMutex // this is a sync for map of mutexes below
 	mutex        map[string]*sync.Mutex
 }
 
-// NewKeyLock конструктор
-func NewKeyLock() *LockKey {
-
-	return &LockKey{
+// NewKeyLock creates new keyLock object
+func NewKeyLock() *keyLock {
+	return &keyLock{
 		mutex: make(map[string]*sync.Mutex),
 	}
 }
 
-func (lk *LockKey) newKey(key string) {
-
+// newKey creates new keyLock object by key
+func (lk *keyLock) newKey(key string) {
 	lk.mutex[key] = &sync.Mutex{}
 }
 
-// Block вызывает блокировку.
-// При повторном вызове подвисает в ожидании разблокировки
-func (lk *LockKey) Block(key string) {
-
+// Block blocks lk. If called more than once waits for an unlock
+func (lk *keyLock) Block(key string) {
 	lk.RLock()
 	m, ok := lk.mutex[key]
 	lk.RUnlock()
+
 	if !ok {
 		lk.Lock()
-		lk.mutex[key] = &sync.Mutex{}
-		m, ok = lk.mutex[key]
+		lk.newKey(key)
+		m, _ = lk.mutex[key]
 		lk.Unlock()
-		if !ok {
-			panic("lock.block(): can't create mutex")
-		}
 	}
 
 	m.Lock()
 }
 
-// Unblock вызывает разблокировку.
-// При повторном вызове ничего не происходит.
-func (lk *LockKey) Unblock(key string) {
-
+// Unblock unblocks lk by key
+func (lk *keyLock) Unblock(key string) {
 	lk.RLock()
 	m, ok := lk.mutex[key]
 	lk.RUnlock()
