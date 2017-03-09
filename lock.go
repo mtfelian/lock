@@ -37,44 +37,44 @@ func (obj *lock) Unblock() {
 
 // keyLock is a mutex lock by key object
 type keyLock struct {
-	sync.RWMutex // this is a sync for map of mutexes below
-	mutex        map[string]*sync.Mutex
+	sync.RWMutex // this is a sync for map of locks below
+	locks        map[string]*lock
 }
 
 // NewKeyLock creates new keyLock object
 func NewKeyLock() *keyLock {
 	return &keyLock{
-		mutex: make(map[string]*sync.Mutex),
+		locks: make(map[string]*lock),
 	}
 }
 
 // newKey creates new keyLock object by key
 func (lk *keyLock) newKey(key string) {
-	lk.mutex[key] = &sync.Mutex{}
+	lk.locks[key] = NewLock()
 }
 
-// Block blocks lk. If called more than once waits for an unlock
+// Block blocks lk by key. If called more than once waits for an unlock
 func (lk *keyLock) Block(key string) {
 	lk.RLock()
-	m, ok := lk.mutex[key]
+	l, ok := lk.locks[key]
 	lk.RUnlock()
 
 	if !ok {
 		lk.Lock()
 		lk.newKey(key)
-		m, _ = lk.mutex[key]
+		l, _ = lk.locks[key]
 		lk.Unlock()
 	}
 
-	m.Lock()
+	l.Block()
 }
 
-// Unblock unblocks lk by key
+// Unblock unblocks lk by key. If called more than once, does nothing
 func (lk *keyLock) Unblock(key string) {
 	lk.RLock()
-	m, ok := lk.mutex[key]
+	l, ok := lk.locks[key]
 	lk.RUnlock()
 	if ok {
-		m.Unlock()
+		l.Unblock()
 	}
 }
